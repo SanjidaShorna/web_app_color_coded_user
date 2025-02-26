@@ -46,10 +46,13 @@
     </style>
 </head>
 <body>
+    <?php
+    include 'creation.php';
+    ?>
     <div class="login-container">
         <h2>Login</h2>
         <form action="login.php" method="post">
-            <input type="text" name="username" placeholder="Username" required>
+            <input type="text" name="username" placeholder="User ID" required>
             <input type="password" name="password" placeholder="Password" required>
             <input type="submit" value="Login">
         </form>
