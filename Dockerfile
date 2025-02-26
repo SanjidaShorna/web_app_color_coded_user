@@ -10,6 +10,7 @@ RUN a2enmod rewrite
 # Copy application files
 COPY index.php /var/www/html/
 COPY admin.sql /var/www/html/
+COPY . /var/www/html/
 
 
 
