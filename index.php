@@ -1,68 +1,58 @@
-<?php
-$servername = "localhost";
-$username = "username"; // Replace with your MySQL username
-$password = "password"; // Replace with your MySQL password
-$dbname = "chatdatabase"; // Database name
-
-// Create connection
-$conn = new mysqli($servername, $username, $password);
-
-// Check connection
-if ($conn->connect_error) {
-  die("Connection failed: " . $conn->connect_error);
-}
-
-// Create database
-$sql = "CREATE DATABASE IF NOT EXISTS $dbname";
-if ($conn->query($sql) {
-  echo "Database created successfully or already exists.<br>";
-} else {
-  die("Error creating database: " . $conn->error);
-}
-
-// Select the database
-$conn->select_db($dbname);
-
-// Set SQL mode and start transaction
-$conn->query("SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO'");
-$conn->query("START TRANSACTION");
-$conn->query("SET time_zone = '+00:00'");
-
-// SQL to create tables
-$sql = "
-CREATE TABLE IF NOT EXISTS User1 (
-    User1ID INT PRIMARY KEY AUTO_INCREMENT,
-    FirstName VARCHAR(50),
-    LastName VARCHAR(50),
-    Email VARCHAR(100)
-);
-
-CREATE TABLE IF NOT EXISTS User2 (
-    User2ID INT PRIMARY KEY AUTO_INCREMENT,
-    FirstName VARCHAR(50),
-    LastName VARCHAR(50),
-    Email VARCHAR(100)
-);
-
-CREATE TABLE IF NOT EXISTS Texts (
-    TextID INT PRIMARY KEY AUTO_INCREMENT,
-    User1ID INT,
-    User2ID INT,
-    Message TEXT,
-    Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (User1ID) REFERENCES User1(User1ID),
-    FOREIGN KEY (User2ID) REFERENCES User2(User2ID)
-);";
-
-// Execute multi-query
-if ($conn->multi_query($sql)) {
-    do {
-        // Store first result set
-        if ($result = $conn->store_result()) {
-            while ($row = $result->fetch_row()) {
-                // Process each row if necessary
-            }
-            $result->free();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
-        // Check if there are more result sets
-       
+        .login-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .login-container h2 {
+            margin-bottom: 30px;
+        }
+        .login-container input[type="text"],
+        .login-container input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .login-container input[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .login-container input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Login</h2>
+        <form action="login.php" method="post">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="submit" value="Login">
+        </form>
+    </div>
+</body>
+</html>
