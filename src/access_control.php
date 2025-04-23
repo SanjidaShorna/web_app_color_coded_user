@@ -4,27 +4,22 @@ require 'db.php'; // Include database connection
 
 // Function to get user role
 function getUserRole($user_id, $conn) {
-    $query = "SELECT roles.role_name FROM users 
-              JOIN roles ON users.role_id = roles.id 
-              WHERE users.id = ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_assoc()['role_name'] ?? null;
+    $query = "SELECT user_management.roles.role_name FROM user_management.users 
+              JOIN user_management.roles ON user_management.users.role_id = user_management.roles.id 
+              WHERE user_management.users.id = :user_id";
+    
+    return query_safe($conn, $query, [':user_id' => $user_id])->fetch(PDO::FETCH_ASSOC)['role_name'] ?? null;
 }
 
 // Function to check if a role has a permission
 function hasPermission($role, $permission, $conn) {
-    $query = "SELECT COUNT(*) as count FROM role_permissions 
-              JOIN roles ON role_permissions.role_id = roles.id 
-              JOIN permissions ON role_permissions.permission_id = permissions.id 
-              WHERE roles.role_name = ? AND permissions.permission_name = ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("ss", $role, $permission);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_assoc()['count'] > 0;
+    $query = "SELECT COUNT(*) as count FROM user_management.role_permissions 
+              JOIN user_management.roles ON user_management.role_permissions.role_id = user_management.roles.id 
+              JOIN user_management.permissions ON user_management.role_permissions.permission_id = user_management.permissions.id 
+              WHERE user_management.roles.role_name = :role AND user_management.permissions.permission_name = :permission";
+    
+    $result = query_safe($conn, $query, [':role' => $role, ':permission' => $permission])->fetch(PDO::FETCH_ASSOC);
+    return $result['count'] > 0;
 }
 
 // Restrict access based on permission
@@ -41,5 +36,5 @@ function requirePermission($permission) {
 }
 
 // Example: Restrict a page to only admins
-requirePermission('manage_users');
-?>
+// requirePermission('manage_users');
+?>s

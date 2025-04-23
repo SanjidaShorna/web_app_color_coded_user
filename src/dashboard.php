@@ -2,7 +2,12 @@
 session_start();
 require 'db.php';
 
-// Check if user is logged in
+if (isset($_POST['guest_login'])) {
+    $_SESSION['user_id'] = 'guest';
+    $_SESSION['role_id'] = 3; // Assuming 3 is your guest role ID
+}
+
+// Regular authentication check
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
@@ -10,46 +15,57 @@ if (!isset($_SESSION['user_id'])) {
 
 // Function to get user role
 function getUserRole($user_id, $conn) {
-    $query = "SELECT roles.role_name FROM users 
-              JOIN roles ON users.role_id = roles.id 
-              WHERE users.id = ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_assoc()['role_name'] ?? null;
+    $query = "SELECT user_management.roles.role_name FROM user_management.users 
+              JOIN user_management.roles ON user_management.users.role_id = user_management.roles.id 
+              WHERE user_management.users.id = :user_id";
+    try {
+        $stmt = query_safe($conn, $query, ['user_id' => $user_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['role_name'] ?? null;
+    } catch (PDOException $e) {
+        return null;
+    }
 }
 
 // Function to check if a role has a permission
 function hasPermission($role, $permission, $conn) {
-    $query = "SELECT COUNT(*) as count FROM role_permissions 
-              JOIN roles ON role_permissions.role_id = roles.id 
-              JOIN permissions ON role_permissions.permission_id = permissions.id 
-              WHERE roles.role_name = ? AND permissions.permission_name = ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("ss", $role, $permission);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_assoc()['count'] > 0;
+    $query = "SELECT COUNT(*) as count FROM user_management.role_permissions 
+              JOIN user_management.roles ON user_management.role_permissions.role_id = user_management.roles.id 
+              JOIN user_management.permissions ON user_management.role_permissions.permission_id = user_management.permissions.id 
+              WHERE user_management.roles.role_name = :role AND user_management.permissions.permission_name = :permission";
+    try {
+        $stmt = query_safe($conn, $query, ['role' => $role, 'permission' => $permission]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['count'] > 0;
+    } catch (PDOException $e) {
+        return false;
+    }
 }
 
 // Get user information
 $role = getUserRole($_SESSION['user_id'], $conn);
 
 // Get username
-$query = "SELECT username FROM users WHERE id = ?";
-$stmt = $conn->prepare($query);
-$stmt->bind_param("i", $_SESSION['user_id']);
-$stmt->execute();
-$result = $stmt->get_result();
-$username = $result->fetch_assoc()['username'] ?? 'User';
+$query = "SELECT username FROM user_management.users WHERE id = :user_id";
+try {
+    $stmt = query_safe($conn, $query, ['user_id' => $_SESSION['user_id']]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $username = $result['username'] ?? 'User';
+} catch (PDOException $e) {
+    $username = 'User';
+}
 
 // Count total users (for admin)
 $total_users = 0;
 if ($role === 'Admin') {
-    $count_query = "SELECT COUNT(*) as count FROM users";
-    $count_result = $conn->query($count_query);
-    $total_users = $count_result->fetch_assoc()['count'];
+    try {
+        $count_query = "SELECT COUNT(*) as count FROM user_management.users";
+        $stmt = query_safe($conn, $count_query, []);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $total_users = $result['count'];
+    } catch (PDOException $e) {
+        $total_users = 0;
+    }
 }
 ?>
 
@@ -149,16 +165,6 @@ if ($role === 'Admin') {
         .nav a.active {
             background-color: rgba(255, 255, 255, 0.25);
         }
-        
-        <div class="nav">
-            <a href="dashboard.php" class="active">Dashboard</a>
-            <a href="profile_management.php">My Profile</a>
-        <?php if ($role === 'Admin'): ?>
-            <a href="admin_page.php">Admin Panel</a>
-        <?php endif; ?>
-            <a href="group_info.php">Group Info</a>
-            <a href="logout.php">Logout</a>
-        </div>
         
         /* Dashboard Cards */
         .cards {
@@ -285,8 +291,6 @@ if ($role === 'Admin') {
             .nav a {
                 margin: 5px 10px 5px 0; /* Adjust margins for mobile */
             }
-
-            
         }
         .clickable {
             cursor: pointer;
@@ -376,7 +380,7 @@ if ($role === 'Admin') {
                     <div class="username"><?php echo htmlspecialchars($username); ?></div>
                     <div class="role">
                         <?php echo htmlspecialchars($role); ?>
-                        <span class="role-badge role-<?php echo strtolower($role); ?>"><?php echo htmlspecialchars($role); ?></span>
+                        <span class="role-badge role-<?php echo strtolower(htmlspecialchars($role)); ?>"><?php echo htmlspecialchars($role); ?></span>
                     </div>
                 </div>
             </div>
@@ -418,10 +422,10 @@ if ($role === 'Admin') {
         <div class="admin-section">
             <h2>Admin Dashboard</h2>
             <div class="stats">
-            <div class="stat-card clickable" onclick="showUsersTable()">
+                <div class="stat-card">
                 <div class="number"><?php echo $total_users; ?></div>
                 <div class="label">Total Users</div>
-            </div>
+                </div>
                 <div class="stat-card">
                     <div class="number">3</div>
                     <div class="label">User Roles</div>

@@ -15,38 +15,45 @@ if (!isset($_SESSION['user_id'])) {
 
 // Function to get user role
 function getUserRole($user_id, $conn) {
-    $query = "SELECT roles.role_name FROM users 
-              JOIN roles ON users.role_id = roles.id 
-              WHERE users.id = ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_assoc()['role_name'] ?? 'Unknown';
+    try {
+        $query = "SELECT r.role_name FROM user_management.users u
+                  JOIN user_management.roles r ON u.role_id = r.id 
+                  WHERE u.id = ?";
+        $stmt = query_safe($conn, $query, [$user_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['role_name'] ?? 'Unknown';
+    } catch (PDOException $e) {
+        error_log("Error getting user role: " . $e->getMessage());
+        return 'Unknown';
+    }
 }
 
 // Function to check if a role has a permission
 function hasPermission($role, $permission, $conn) {
-    $query = "SELECT COUNT(*) as count FROM role_permissions 
-              JOIN roles ON role_permissions.role_id = roles.id 
-              JOIN permissions ON role_permissions.permission_id = permissions.id 
-              WHERE roles.role_name = ? AND permissions.permission_name = ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("ss", $role, $permission);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_assoc()['count'] > 0;
+    try {
+        $query = "SELECT COUNT(*) as count FROM user_management.role_permissions rp
+                  JOIN user_management.roles r ON rp.role_id = r.id 
+                  JOIN user_management.permissions p ON rp.permission_id = p.id 
+                  WHERE r.role_name = ? AND p.permission_name = ?";
+        $stmt = query_safe($conn, $query, [$role, $permission]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['count'] > 0;
+    } catch (PDOException $e) {
+        error_log("Error checking permission: " . $e->getMessage());
+        return false;
+    }
 }
 
 // Get current user data
 $user = null;
 if (isset($_SESSION['user_id'])) {
-    $query = "SELECT id, username FROM users WHERE id = ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $_SESSION['user_id']);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $user = $result->fetch_assoc();
+    try {
+        $query = "SELECT id, username FROM user_management.users WHERE id = ?";
+        $stmt = query_safe($conn, $query, [$_SESSION['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Error getting user data: " . $e->getMessage());
+    }
 }
 
 // Initialize variables
@@ -63,54 +70,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Update username
         if (!empty($username) && $username !== $user['username']) {
-            // Check if username is already taken
-            $check_query = "SELECT id FROM users WHERE username = ? AND id != ?";
-            $check_stmt = $conn->prepare($check_query);
-            $check_stmt->bind_param("si", $username, $_SESSION['user_id']);
-            $check_stmt->execute();
-            $check_result = $check_stmt->get_result();
-            
-            if ($check_result->num_rows > 0) {
-                $error = "Username already exists";
-            } else {
-                $update_query = "UPDATE users SET username = ? WHERE id = ?";
-                $update_stmt = $conn->prepare($update_query);
-                $update_stmt->bind_param("si", $username, $_SESSION['user_id']);
+            try {
+                // Check if username is already taken
+                $check_query = "SELECT id FROM user_management.users WHERE username = ? AND id != ?";
+                $check_stmt = query_safe($conn, $check_query, [$username, $_SESSION['user_id']]);
+                $check_result = $check_stmt->fetch(PDO::FETCH_ASSOC);
                 
-                if ($update_stmt->execute()) {
+                if ($check_result) {
+                    $error = "Username already exists";
+                } else {
+                    $update_query = "UPDATE user_management.users SET username = ? WHERE id = ?";
+                    $update_stmt = query_safe($conn, $update_query, [$username, $_SESSION['user_id']]);
+                    
                     $success = "Profile updated successfully!";
                     $user['username'] = $username;
-                } else {
-                    $error = "Error updating profile: " . $conn->error;
                 }
+            } catch (PDOException $e) {
+                $error = "Error updating profile: " . $e->getMessage();
             }
         }
         
         // Handle Password Change
         if (!empty($current_password) && !empty($new_password)) {
-            // Get current password hash from database
-            $pwd_query = "SELECT password FROM users WHERE id = ?";
-            $pwd_stmt = $conn->prepare($pwd_query);
-            $pwd_stmt->bind_param("i", $_SESSION['user_id']);
-            $pwd_stmt->execute();
-            $pwd_result = $pwd_stmt->get_result();
-            $current_hash = $pwd_result->fetch_assoc()['password'];
-            
-            // Verify current password
-            if (password_verify($current_password, $current_hash)) {
-                $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+            try {
+                // Get current password hash from database
+                $pwd_query = "SELECT password FROM user_management.users WHERE id = ?";
+                $pwd_stmt = query_safe($conn, $pwd_query, [$_SESSION['user_id']]);
+                $pwd_result = $pwd_stmt->fetch(PDO::FETCH_ASSOC);
+                $current_hash = $pwd_result['password'];
                 
-                $pwd_update_query = "UPDATE users SET password = ? WHERE id = ?";
-                $pwd_update_stmt = $conn->prepare($pwd_update_query);
-                $pwd_update_stmt->bind_param("si", $hashed_password, $_SESSION['user_id']);
-                
-                if ($pwd_update_stmt->execute()) {
+                // Verify current password
+                if (password_verify($current_password, $current_hash)) {
+                    $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+                    
+                    $pwd_update_query = "UPDATE user_management.users SET password = ? WHERE id = ?";
+                    $pwd_update_stmt = query_safe($conn, $pwd_update_query, [$hashed_password, $_SESSION['user_id']]);
+                    
                     $success .= " Password updated successfully!";
                 } else {
-                    $error = "Error updating password: " . $conn->error;
+                    $error = "Current password is incorrect!";
                 }
-            } else {
-                $error = "Current password is incorrect!";
+            } catch (PDOException $e) {
+                $error = "Error updating password: " . $e->getMessage();
             }
         }
         
@@ -124,18 +125,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Delete account
     if (isset($_POST['delete_account'])) {
-        // Implement account deletion logic here
-        $delete_query = "DELETE FROM users WHERE id = ?";
-        $delete_stmt = $conn->prepare($delete_query);
-        $delete_stmt->bind_param("i", $_SESSION['user_id']);
-        
-        if ($delete_stmt->execute()) {
+        try {
+            // Implement account deletion logic here
+            $delete_query = "DELETE FROM user_management.users WHERE id = ?";
+            $delete_stmt = query_safe($conn, $delete_query, [$_SESSION['user_id']]);
+            
             // Destroy session and redirect to login
             session_destroy();
             header('Location: login.php?deleted=true');
             exit;
-        } else {
-            $error = "Error deleting account: " . $conn->error;
+        } catch (PDOException $e) {
+            $error = "Error deleting account: " . $e->getMessage();
         }
     }
 }

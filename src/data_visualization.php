@@ -2,22 +2,21 @@
 session_start();
 require 'db.php';
 
-// Check if user is logged in and is admin
+// Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
 }
 
-// Function to get user role
+// Function to get user role using PDO
 function getUserRole($user_id, $conn) {
-    $query = "SELECT roles.role_name FROM users 
-              JOIN roles ON users.role_id = roles.id 
-              WHERE users.id = ?";
+    $query = "SELECT r.role_name FROM user_management.users u
+              JOIN user_management.roles r ON u.role_id = r.id 
+              WHERE u.id = :user_id";
+    
     $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->fetch_assoc()['role_name'] ?? null;
+    $stmt->execute(['user_id' => $user_id]);
+    return $stmt->fetchColumn() ?: null;
 }
 
 // Get user role
@@ -44,9 +43,9 @@ $languageKeywords = [
 // Keep original colors as requested
 $languageColors = [
     "English" => "red",
-    "Spanish" => "blue",
-    "French" => "green",
-    "Other" => "yellow"
+    "Spanish" => "green",
+    "French" => "yellow",
+    "Other" => "blue"
 ];
 
 // Open and read the CSV file
@@ -85,7 +84,30 @@ if (($handle = fopen($csvFile, "r")) !== FALSE) {
 // Prepare data for Chart.js
 $labels = json_encode(array_keys($languageCounts));
 $dataValues = json_encode(array_values($languageCounts));
-$colors = json_encode(array_values(array_intersect_key($languageColors, $languageCounts)));
+
+// Fix colors array to match the detected languages
+$chartColors = [];
+foreach (array_keys($languageCounts) as $lang) {
+    $chartColors[] = $languageColors[$lang] ?? 'gray';
+}
+$colors = json_encode($chartColors);
+
+// Get user statistics using PDO
+$roleStats = [];
+try {
+    $query = "SELECT r.role_name, COUNT(u.id) as count 
+              FROM user_management.roles r
+              LEFT JOIN user_management.users u ON r.id = u.role_id
+              GROUP BY r.role_name";
+    
+    $stmt = query_safe($conn, $query);
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $roleStats[$row['role_name']] = $row['count'];
+    }
+} catch (PDOException $e) {
+    // Handle error silently - stats will just be empty
+    $roleStats = ['Admin' => 0, 'User' => 0, 'Guest' => 0];
+}
 ?>
 
 <!DOCTYPE html>
@@ -212,10 +234,9 @@ $colors = json_encode(array_values(array_intersect_key($languageColors, $languag
         }
 
         .english-color { background-color: red; }
+        .spanish-color { background-color: green; }
+        .french-color { background-color: yellow; }
         .other-color { background-color: blue; }
-        .spanish-color { background-color: green; } 
-        .french-color { background-color: yellow; } 
-        
 
         /* Responsive Styles */
         @media (max-width: 768px) {
@@ -257,6 +278,25 @@ $colors = json_encode(array_values(array_intersect_key($languageColors, $languag
                 <div class="label">English Tweets</div>
             </div>
         </div>
+        
+        <!-- User Statistics -->
+        <div class="chart-container">
+            <h2>System User Statistics</h2>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="number"><?php echo $roleStats['Admin'] ?? 0; ?></div>
+                    <div class="label">Admin Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number"><?php echo $roleStats['User'] ?? 0; ?></div>
+                    <div class="label">Regular Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number"><?php echo $roleStats['Guest'] ?? 0; ?></div>
+                    <div class="label">Guest Users</div>
+                </div>
+            </div>
+        </div>
 
         <!-- Chart Container -->
         <div class="chart-container">
@@ -270,16 +310,16 @@ $colors = json_encode(array_values(array_intersect_key($languageColors, $languag
                     <span>English</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box other-color"></div>
-                    <span>Other</span>
-                </div>
-                <div class="legend-item">
                     <div class="color-box spanish-color"></div>
                     <span>Spanish</span>
                 </div>
                 <div class="legend-item">
                     <div class="color-box french-color"></div>
                     <span>French</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box other-color"></div>
+                    <span>Other</span>
                 </div>
             </div>
         </div>

@@ -1,34 +1,57 @@
 <?php
 require 'access_control.php';
-
-// Only admins can access this page
 requirePermission('manage_users');
 
-// Function to generate a random email based on username
-function generateEmail($username) {
-    $domains = ['example.com', 'testmail.org', 'company.net', 'domain.io'];
-    $randomDomain = $domains[array_rand($domains)];
-    return strtolower($username) . '@' . $randomDomain;
-}
-
-// Get users from database
-function getUsers($conn) {
-    $query = "SELECT users.id, users.username, roles.role_name 
-              FROM users 
-              JOIN roles ON users.role_id = roles.id";
-    $result = $conn->query($query);
+// Process form submission for editing user
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_user') {
+    $user_id = $_POST['user_id'] ?? '';
+    $username = $_POST['username'] ?? '';
+    $email = $_POST['email'] ?? '';
+    $role_id = $_POST['role_id'] ?? '';
     
-    $users = [];
-    if ($result && $result->num_rows > 0) {
-        while ($row = $result->fetch_assoc()) {
-            $row['email'] = generateEmail($row['username']);
-            $users[] = $row;
+    // Validate inputs
+    if (empty($user_id) || empty($username) || empty($email) || empty($role_id)) {
+        $error = "All fields are required";
+    } else {
+        try {
+            // Update user in database using prepared statement
+            $query = "UPDATE user_management.users SET username = ?, email = ?, role_id = ? WHERE id = ?";
+            $params = [$username, $email, $role_id, $user_id];
+            $stmt = query_safe($conn, $query, $params);
+            $success = "User updated successfully!";
+        } catch (PDOException $e) {
+            $error = "Failed to update user: " . $e->getMessage();
         }
     }
-    return $users;
+}
+
+function getRoles($conn) {
+    try {
+        $query = "SELECT id, role_name FROM user_management.roles";
+        $stmt = query_safe($conn, $query);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Error fetching roles: " . $e->getMessage());
+        return [];
+    }
+}
+
+function getUsers($conn) {
+    try {
+        // Updated query to include the email field from the database
+        $query = "SELECT u.id, u.username, u.email, u.role_id, r.role_name 
+                FROM user_management.users u
+                JOIN user_management.roles r ON u.role_id = r.id";
+        $stmt = query_safe($conn, $query);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Error fetching users: " . $e->getMessage());
+        return [];
+    }
 }
 
 $users = getUsers($conn);
+$roles = getRoles($conn);
 
 echo "Welcome, Admin! You have access to manage users.";
 ?>
@@ -69,11 +92,25 @@ echo "Welcome, Admin! You have access to manage users.";
             margin: 10px 0;
             background: #444;
             cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .sidebar ul li:hover {
+            background: #555;
+        }
+        .sidebar ul li:first-child {
+            background: #444;
+        }
+        .sidebar ul li:first-child:hover {
+            background: #555;
         }
         .sidebar ul li a {
             color: white;
             text-decoration: none;
             display: block;
+        }
+        .sidebar ul li a i {
+            margin-right: 10px;
         }
         .main-content {
             margin-left: 270px;
@@ -136,7 +173,7 @@ echo "Welcome, Admin! You have access to manage users.";
             z-index: 1000;
             width: 300px;
         }
-        .popup input {
+        .popup input, .popup select {
             display: block;
             margin-bottom: 10px;
             padding: 5px;
@@ -156,22 +193,47 @@ echo "Welcome, Admin! You have access to manage users.";
             background: rgba(0, 0, 0, 0.5);
             z-index: 999;
         }
+        .message {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
     </style>
 </head>
 <body>
     <div class="overlay" id="overlay"></div>
     <div class="popup" id="popup">
         <h2>Edit User</h2>
-        <input type="text" id="username" placeholder="Name">
-        <input type="email" id="useremail" placeholder="Email">
-        <input type="text" id="userrole" placeholder="Role">
-        <button onclick="closePopup()">Save</button>
-        <button class="close-btn" onclick="closePopup()">Cancel</button>
+        <form method="post" action="">
+            <input type="hidden" id="user_id" name="user_id">
+            <input type="hidden" name="action" value="edit_user">
+            <input type="text" id="username" name="username" placeholder="Username">
+            <input type="email" id="email" name="email" placeholder="Email">
+            <select id="role_id" name="role_id">
+                <?php foreach ($roles as $role): ?>
+                    <option value="<?php echo $role['id']; ?>"><?php echo htmlspecialchars($role['role_name']); ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit">Save</button>
+            <button type="button" class="close-btn" onclick="closePopup()">Cancel</button>
+        </form>
     </div>
 
     <div class="sidebar">
         <h2>Admin Panel</h2>
         <ul>
+            <li><a href="dashboard.php"><i class="fas fa-home"></i> Back to Dashboard</a></li>
             <li><a href="#users"><i class="fas fa-users"></i> Users</a></li>
             <li><a href="#account"><i class="fas fa-user-cog"></i> Account Management</a></li>
             <li><a href="#activity"><i class="fas fa-chart-line"></i> Activity Monitoring</a></li>
@@ -182,33 +244,15 @@ echo "Welcome, Admin! You have access to manage users.";
         <header>
             <h1>Admin Dashboard</h1>
         </header>
-        <section id="users">
-            <h2>Users List</h2>
-            <table>
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-                <?php if (count($users) > 0): ?>
-                    <?php foreach ($users as $user): ?>
-                        <tr>
-                            <td><?php echo $user['id']; ?></td>
-                            <td><?php echo htmlspecialchars($user['username']); ?></td>
-                            <td><?php echo htmlspecialchars($user['email']); ?></td>
-                            <td>Active</td>
-                            <td><button onclick="openPopup('<?php echo htmlspecialchars($user['username']); ?>', '<?php echo htmlspecialchars($user['email']); ?>', '<?php echo htmlspecialchars($user['role_name']); ?>')">Manage</button></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="5">No users found</td>
-                    </tr>
-                <?php endif; ?>
-            </table>
-        </section>
+        
+        <?php if (isset($error)): ?>
+            <div class="message error"><?php echo $error; ?></div>
+        <?php endif; ?>
+        
+        <?php if (isset($success)): ?>
+            <div class="message success"><?php echo $success; ?></div>
+        <?php endif; ?>
+        
         <section id="account">
             <h2>Account Management</h2>
             <table>
@@ -226,7 +270,7 @@ echo "Welcome, Admin! You have access to manage users.";
                             <td><?php echo htmlspecialchars($user['username']); ?></td>
                             <td><?php echo htmlspecialchars($user['email']); ?></td>
                             <td><?php echo htmlspecialchars($user['role_name']); ?></td>
-                            <td><button class="edit-btn" onclick="openPopup('<?php echo htmlspecialchars($user['username']); ?>', '<?php echo htmlspecialchars($user['email']); ?>', '<?php echo htmlspecialchars($user['role_name']); ?>')">Edit</button></td>
+                            <td><button class="edit-btn" onclick="openPopup(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars(addslashes($user['username'])); ?>', '<?php echo htmlspecialchars(addslashes($user['email'])); ?>', <?php echo $user['role_id']; ?>)">Edit</button></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
@@ -285,10 +329,11 @@ echo "Welcome, Admin! You have access to manage users.";
         </section>
     </div>
     <script>
-    function openPopup(name, email, role) {
-        document.getElementById('username').value = name;
-        document.getElementById('useremail').value = email;
-        document.getElementById('userrole').value = role;
+    function openPopup(userId, username, email, roleId) {
+        document.getElementById('user_id').value = userId;
+        document.getElementById('username').value = username;
+        document.getElementById('email').value = email;
+        document.getElementById('role_id').value = roleId;
         document.getElementById('popup').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
     }

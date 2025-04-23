@@ -1,13 +1,23 @@
 <?php
-$host = "db"; // The service name in docker-compose
+$host = "db";
 $username = "user";
 $password = "password";
 $dbname = "user_management";
-$port = 3307;
+$port = 5432;
 
-$conn = new mysqli($host, $username, $password, $dbname);
+$conn = new PDO("pgsql:host=$host;port=$port;dbname=$dbname", $username, $password);
+$conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+// try {
+//     $conn = new PDO("pgsql:host=$host;port=$port;dbname=$dbname", $username, $password);
+//     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+// } catch (PDOException $e) {
+//     die("Connection failed: " . $e->getMessage());
+// }
+
+function query_safe($conn, $query, $params = []) {
+    $stmt = $conn->prepare($query);
+    $stmt->execute($params);
+    return $stmt;
 }
 ?>

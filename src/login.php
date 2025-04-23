@@ -1,8 +1,6 @@
 <?php
-// Enable output buffering at the very beginning
 ob_start();
 
-// Enable error reporting for debugging
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -10,7 +8,6 @@ error_reporting(E_ALL);
 session_start();
 require 'db.php';
 
-// If user is already logged in, redirect to dashboard
 if (isset($_SESSION['user_id'])) {
     header('Location: dashboard.php');
     exit;
@@ -26,45 +23,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($username) || empty($password)) {
         $error = "Username and password are required";
     } else {
-        // Check user credentials
-        $query = "SELECT id, password, role_id FROM users WHERE username = ?";
-        $stmt = $conn->prepare($query);
-        $stmt->bind_param("s", $username);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows === 1) {
-            $user = $result->fetch_assoc();
+        $query = "SELECT id, password, role_id FROM user_management.users WHERE username = :username";
+        try {
+            $stmt = query_safe($conn, $query, ['username' => $username]);
             
-            // DEBUG
-            $debug_info .= "User found in database. ID: " . $user['id'] . ", Role ID: " . $user['role_id'] . "<br>";
+            $debug_info .= "Query executed successfully.<br>";
             
-            // Verify password
-            if (password_verify($password, $user['password'])) {
-                // Set session variables
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['role_id'] = $user['role_id'];
+            if ($stmt->rowCount() === 1) {
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 
-                // DEBUG
-                $debug_info .= "Password verified. Session variables set.<br>";
-                $debug_info .= "SESSION['user_id']: " . $_SESSION['user_id'] . "<br>";
-                $debug_info .= "SESSION['role_id']: " . $_SESSION['role_id'] . "<br>";
+                $debug_info .= "User found in database. ID: " . $user['id'] . ", Role ID: " . $user['role_id'] . "<br>";
                 
-                // Redirect to dashboard
-                header("Location: dashboard.php");
-                exit; // Make sure to exit after redirect
+                if (password_verify($password, $user['password'])) {
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['role_id'] = $user['role_id'];
+                    
+                    $debug_info .= "Password verified. Session variables set.<br>";
+                    $debug_info .= "SESSION['user_id']: " . $_SESSION['user_id'] . "<br>";
+                    $debug_info .= "SESSION['role_id']: " . $_SESSION['role_id'] . "<br>";
+                    
+                    header("Location: dashboard.php");
+                    exit;
+                } else {
+                    $error = "Invalid username or password";
+                    $debug_info .= "Password verification failed.<br>";
+                }
             } else {
                 $error = "Invalid username or password";
-                $debug_info .= "Password verification failed.<br>";
+                $debug_info .= "User not found in database.<br>";
             }
-        } else {
-            $error = "Invalid username or password";
-            $debug_info .= "User not found in database.<br>";
+        } catch (PDOException $e) {
+            $error = "Login error";
+            $debug_info .= "Database error: " . $e->getMessage() . "<br>";
         }
     }
 }
 
-// Check for account deletion message
 $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
 ?>
 
@@ -76,7 +70,6 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
     <title>Login</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        /* General Styles */
         body {
             font-family: 'Poppins', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -89,7 +82,6 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             color: #333;
         }
 
-        /* Login Container */
         .login-container {
             background: #fff;
             padding: 30px;
@@ -107,7 +99,6 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             color: #444;
         }
 
-        /* Form Styles */
         .form-group {
             margin-bottom: 20px;
             text-align: left;
@@ -139,7 +130,6 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
         }
 
-        /* Button */
         .login-container button {
             width: 100%;
             padding: 12px;
@@ -158,7 +148,6 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             background: #5a6fd1;
         }
 
-        /* Links */
         .register-link {
             margin-top: 20px;
             font-size: 14px;
@@ -175,7 +164,6 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             text-decoration: underline;
         }
 
-        /* Messages */
         .message {
             padding: 10px;
             margin-bottom: 20px;
@@ -207,7 +195,6 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             overflow-x: auto;
         }
 
-        /* Messages */
         .message {
             padding: 10px;
             margin-bottom: 20px;
@@ -218,7 +205,6 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             transition: opacity 0.5s ease;
         }
 
-        /* Logo/Brand Area */
         .brand {
             margin-bottom: 30px;
         }
@@ -242,13 +228,34 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             font-weight: 600;
             color: #444;
         }
+
+        .guest-login {
+            margin-top: 20px;
+        }
+
+        .guest-btn {
+            width: 100%;
+            padding: 12px;
+            background: #764ba2;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .guest-btn:hover {
+            background: #6a4191;
+        }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="brand">
-            <div class="brand-logo">CB</div>
-            <div class="brand-name">Chat Bot</div>
+            <div class="brand-logo">CA</div>
+            <div class="brand-name">Chat Application</div>
         </div>
         
         <h2>Login</h2>
@@ -281,13 +288,19 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
             
             <button type="submit">Login</button>
         </form>
+
+        <!-- <div class="guest-login">
+            <form method="post" action="dashboard.php">
+                <input type="hidden" name="guest_login" value="true">
+                <button type="submit" class="guest-btn">Login as Guest</button>
+            </form>
+        </div> -->
         
         <div class="register-link">
             <p>Don't have an account? <a href="register.php">Register here</a></p>
         </div>
     </div>
     <script>
-        // Function to handle message fadeout
         function hideMessages() {
             const messages = document.querySelectorAll('.message');
             if (messages.length > 0) {
@@ -299,16 +312,14 @@ $deleted = isset($_GET['deleted']) && $_GET['deleted'] === 'true';
                             message.style.display = 'none';
                         }, 500);
                     });
-                }, 5000); // 5 seconds
+                }, 5000);
             }
         }
 
-        // Call the function when page loads
         document.addEventListener('DOMContentLoaded', hideMessages);
     </script>
 </body>
 </html>
 <?php
-// End output buffering and send content
 ob_end_flush();
 ?>

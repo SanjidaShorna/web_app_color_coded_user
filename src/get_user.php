@@ -3,33 +3,35 @@ session_start();
 require 'db.php';
 
 // Check if user is admin
-$query = "SELECT roles.role_name FROM users 
-          JOIN roles ON users.role_id = roles.id 
-          WHERE users.id = ?";
-$stmt = $conn->prepare($query);
-$stmt->bind_param("i", $_SESSION['user_id']);
-$stmt->execute();
-$result = $stmt->get_result();
-$role = $result->fetch_assoc()['role_name'];
+$query = "SELECT user_management.roles.role_name FROM user_management.users 
+          JOIN user_management.roles ON user_management.users.role_id = user_management.roles.id 
+          WHERE user_management.users.id = :user_id";
+$params = [':user_id' => $_SESSION['user_id']];
 
-if ($role !== 'Admin') {
+$result = query_safe($conn, $query, $params);
+$user = $result->fetch(PDO::FETCH_ASSOC);
+
+if (!$user || $user['role_name'] !== 'Admin') {
     http_response_code(403);
     exit('Unauthorized');
 }
 
 // Get all users
-$query = "SELECT users.username, roles.role_name as role, users.created_at 
-          FROM users 
-          JOIN roles ON users.role_id = roles.id 
-          ORDER BY users.created_at DESC";
-$result = $conn->query($query);
+$query = "SELECT user_management.users.username, user_management.roles.role_name as role, 
+          user_management.users.email
+          FROM user_management.users 
+          JOIN user_management.roles ON user_management.users.role_id = user_management.roles.id 
+          ORDER BY user_management.users.id DESC";
+
+$result = query_safe($conn, $query);
 
 $users = array();
-while ($row = $result->fetch_assoc()) {
+while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
     $users[] = array(
         'username' => htmlspecialchars($row['username']),
         'role' => htmlspecialchars($row['role']),
-        'created_at' => date('Y-m-d', strtotime($row['created_at']))
+        'email' => htmlspecialchars($row['email'])
+        // Note: 'created_at' field isn't in the schema from db.sql, so it's replaced with email
     );
 }
 

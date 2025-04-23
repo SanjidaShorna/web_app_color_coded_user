@@ -1,31 +1,32 @@
 <?php
 require 'db.php';
 
-// Check if admin user already exists
-$query = "SELECT id FROM users WHERE username = 'admin'";
-$result = $conn->query($query);
+try {
+    $query = "SELECT id FROM user_management.users WHERE username = 'admin'";
+    $stmt = query_safe($conn, $query);
+    $adminExists = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if ($result->num_rows === 0) {
-    // Create admin user
-    $username = 'admin';
-    $password = 'admin123'; // You should change this to a secure password
-    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-    $role_id = 1; // Admin role
-    
-    $query = "INSERT INTO users (username, password, role_id) VALUES (?, ?, ?)";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("ssi", $username, $hashed_password, $role_id);
-    
-    if ($stmt->execute()) {
+    if (!$adminExists) {
+        $username = 'admin';
+        $email = 'admin@example.com';
+        $password = 'admin123';
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+        $role_id = 1;
+        
+        $query = "INSERT INTO user_management.users (username, email, password, role_id) VALUES (?, ?, ?, ?)";
+        $params = [$username, $email, $hashed_password, $role_id];
+        $stmt = query_safe($conn, $query, $params);
+        
         echo "Admin user created successfully!<br>";
         echo "Username: admin<br>";
+        echo "Email: admin@example.com<br>";
         echo "Password: admin123<br>";
         echo "<a href='login.php'>Go to login page</a>";
     } else {
-        echo "Failed to create admin user: " . $conn->error;
+        echo "Admin user already exists.<br>";
+        echo "<a href='login.php'>Go to login page</a>";
     }
-} else {
-    echo "Admin user already exists.<br>";
-    echo "<a href='login.php'>Go to login page</a>";
+} catch (PDOException $e) {
+    echo "Error: " . $e->getMessage();
 }
 ?>
