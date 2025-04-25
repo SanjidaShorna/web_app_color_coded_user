@@ -1,19 +1,14 @@
 <?php
-// Start session to manage user login state
 session_start();
 
-// Include database connection
 require_once 'db.php';
 
-// Check if logged in
 $loggedIn = isset($_SESSION['loggedIn']) && $_SESSION['loggedIn'] === true;
 
-// Handle login form submission
 if (isset($_POST['login'])) {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
     
-    // Check credentials
     if ($username === 'root' && $password === 'T9x!rV@5mL#8wQz&Kd3') {
         $_SESSION['loggedIn'] = true;
         $loggedIn = true;
@@ -243,7 +238,6 @@ if (isset($_POST['login'])) {
             margin: 30px 0 15px 0;
         }
 
-        /* For mobile responsiveness */
         @media (max-width: 768px) {
             .container {
                 padding: 20px;
@@ -300,7 +294,6 @@ if (isset($_POST['login'])) {
             <h2>Project Pages</h2>
             <div class="links">
                 <?php
-                // Get all PHP files in the current directory
                 $phpFiles = glob('*.php');
                 foreach ($phpFiles as $file) {
                     if ($file != basename($_SERVER['PHP_SELF'])) {
@@ -310,7 +303,6 @@ if (isset($_POST['login'])) {
                     }
                 }
                 
-                // Check for subdirectories and their PHP files
                 $dirs = glob('*', GLOB_ONLYDIR);
                 foreach ($dirs as $dir) {
                     $dirFiles = glob($dir . '/*.php');
@@ -326,7 +318,6 @@ if (isset($_POST['login'])) {
             <h2>Database Contents</h2>
             <?php
             try {
-                // Get all tables in the user_management schema
                 $tableQuery = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'user_management'";
                 $tableStmt = query_safe($conn, $tableQuery);
                 $tables = $tableStmt->fetchAll(PDO::FETCH_COLUMN);
@@ -335,14 +326,12 @@ if (isset($_POST['login'])) {
                     foreach ($tables as $table) {
                         echo '<h3>Table: user_management.' . htmlspecialchars($table) . '</h3>';
                         
-                        // Get table columns
                         $columnQuery = "SELECT column_name, data_type FROM information_schema.columns 
                                         WHERE table_schema = 'user_management' AND table_name = :table 
                                         ORDER BY ordinal_position";
                         $columnStmt = query_safe($conn, $columnQuery, [':table' => $table]);
                         $columns = $columnStmt->fetchAll(PDO::FETCH_ASSOC);
                         
-                        // Get table data
                         $dataQuery = "SELECT * FROM user_management." . $table;
                         $dataStmt = query_safe($conn, $dataQuery);
                         $rows = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
