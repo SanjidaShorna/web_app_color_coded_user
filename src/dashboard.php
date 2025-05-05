@@ -393,6 +393,7 @@ if ($role === 'Admin') {
                 <a href="admin_page.php">Admin Panel</a>
             <?php endif; ?>
             <a href="group_info.php">Group Info</a>
+            <a href="anon_chat.php">Anon Chat</a>
             <a href="logout.php">Logout</a>
         </div>
 

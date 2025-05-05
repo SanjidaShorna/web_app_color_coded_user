@@ -26,6 +26,12 @@ CREATE TABLE IF NOT EXISTS user_management.role_permissions (
     FOREIGN KEY (role_id) REFERENCES user_management.roles(id),
     FOREIGN KEY (permission_id) REFERENCES user_management.permissions(id)
 );
+CREATE TABLE anon_chat (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 
 INSERT INTO user_management.roles (id, role_name) VALUES 
     (1, 'Admin'), 
