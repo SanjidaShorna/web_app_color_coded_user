@@ -32,6 +32,7 @@ $projectFiles = [
     'admin_page.php' => 'admin_page.php',
     'profile_management.php' => 'profile_management.php',
     'data_visualization.php' => 'data_visualization.php',
+    'anon_chat.php' => 'anon_chat.php',
     'group_info.php' => 'group_info.php'
 ];
 

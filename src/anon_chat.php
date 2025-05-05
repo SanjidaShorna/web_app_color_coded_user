@@ -482,6 +482,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
             font-size: 14px;
             color: #666;
         }
+        header .dashboard-btn {
+            color: white;
+            text-decoration: none;
+            font-size: 16px;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            margin-left: 10px;
+       }
+
+       header .dashboard-btn:hover {
+           background-color: rgba(255, 255, 255, 0.3);
+       }
     </style>
 </head>
 <body>
@@ -492,6 +506,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
                 <a href="<?php echo $_SERVER['PHP_SELF']; ?>">Back to Rooms</a>
             <?php else: ?>
                 <span>Anonymous Chat Rooms</span>
+                <a href="dashboard.php" class="dashboard-btn">Dashboard</a>
             <?php endif; ?>
         </header>
         
