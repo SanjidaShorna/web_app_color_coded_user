@@ -1,7 +1,11 @@
 <?php
 require_once 'db.php';
+require_once 'group_chat.php';
 
-session_start();
+// Only start session if one hasn't been started already
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Generate or retrieve user ID for this session
 if (!isset($_SESSION['anon_user_id'])) {
@@ -126,6 +130,46 @@ function getRoomMessages($conn, $roomId) {
     }
 }
 
+// Add after your existing functions
+
+// function getAllUsers($conn) {
+//     try {
+//         $query = "SELECT id, username FROM user_management.users ORDER BY username";
+//         $stmt = query_safe($conn, $query);
+//         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+//     } catch (PDOException $e) {
+//         error_log("Error fetching users: " . $e->getMessage());
+//         return [];
+//     }
+// }
+
+// function createGroupChat($conn, $groupName, $createdBy, $selectedUsers) {
+//     try {
+//         $conn->beginTransaction();
+
+//         // Create group
+//         $query = "INSERT INTO group_chats (group_name, created_by) VALUES (?, ?) RETURNING id";
+//         $stmt = query_safe($conn, $query, [$groupName, $createdBy]);
+//         $groupId = $stmt->fetchColumn();
+
+//         // Add members
+//         $query = "INSERT INTO group_members (group_id, user_id) VALUES (?, ?)";
+//         foreach ($selectedUsers as $userId) {
+//             query_safe($conn, $query, [$groupId, $userId]);
+//         }
+
+//         // Add creator as member
+//         query_safe($conn, $query, [$groupId, $createdBy]);
+
+//         $conn->commit();
+//         return $groupId;
+//     } catch (PDOException $e) {
+//         $conn->rollBack();
+//         error_log("Error creating group chat: " . $e->getMessage());
+//         return false;
+//     }
+// }
+
 // Add a new message to a room
 function addMessage($conn, $roomId, $userId, $message) {
     try {
@@ -137,7 +181,27 @@ function addMessage($conn, $roomId, $userId, $message) {
         return false;
     }
 }
-
+// Add after your existing functions
+function deleteRoom($conn, $roomId) {
+    try {
+        $conn->beginTransaction();
+        
+        // Delete messages first due to foreign key constraint
+        $deleteMessages = "DELETE FROM anon_chat_messages WHERE room_id = ?";
+        query_safe($conn, $deleteMessages, [$roomId]);
+        
+        // Then delete the room
+        $deleteRoom = "DELETE FROM anon_chat_rooms WHERE id = ?";
+        query_safe($conn, $deleteRoom, [$roomId]);
+        
+        $conn->commit();
+        return true;
+    } catch (PDOException $e) {
+        $conn->rollBack();
+        error_log("Error deleting room: " . $e->getMessage());
+        return false;
+    }
+}
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Create new room
@@ -166,6 +230,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['create_group']) && isset($_POST['group_name'])) {
+        $groupName = trim($_POST['group_name']);
+        $selectedUsers = isset($_POST['selected_users']) ? $_POST['selected_users'] : [];
+        
+        if (!empty($groupName) && !empty($selectedUsers)) {
+            $groupId = createGroupChat($conn, $groupName, $user_id, $selectedUsers);
+            if ($groupId) {
+                header('Location: ' . $_SERVER['PHP_SELF'] . '?room=' . $groupId);
+                exit;
+            }
+        }
+    }
+}
+
+
+    // Handle room deletion
+if (isset($_POST['delete_room']) && isset($_POST['room_id'])) {
+        $roomId = intval($_POST['room_id']);
+        if (deleteRoom($conn, $roomId)) {
+            header('Location: ' . $_SERVER['PHP_SELF']);
+            exit;
+        }
+    }
+
+
 
 // Determine if we're in a room or at the room list
 $inRoom = false;
@@ -208,6 +299,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
         echo '</div></div>';
     }
     exit;
+}
+// Add to your existing POST handler
+
+if (isset($_POST['create_group']) && isset($_POST['group_name']) && isset($_POST['selected_users'])) {
+    $groupName = trim($_POST['group_name']);
+    $selectedUsers = $_POST['selected_users'];
+    
+    if (!empty($groupName) && !empty($selectedUsers)) {
+        $groupId = createGroupChat($conn, $groupName, $user_id, $selectedUsers);
+        if ($groupId) {
+            header('Location: ' . $_SERVER['PHP_SELF'] . '?room=' . $groupId);
+            exit;
+        }
+    }
 }
 ?>
 
@@ -310,9 +415,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
         }
         
         .new-room-form {
-            background-color: #f9f9f9;
-            padding: 20px;
-            border-top: 1px solid #eee;
+            background-color: transparent;
+            padding: 0;
+            border-top: none;
         }
         
         .form-title {
@@ -369,7 +474,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
             flex-direction: column;
             gap: 10px;
             height: calc(100vh - 180px);
-        }
+            scroll-behavior: smooth;
+            position: relative;
+         }
         
         .message-container {
             display: flex;
@@ -496,6 +603,203 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
        header .dashboard-btn:hover {
            background-color: rgba(255, 255, 255, 0.3);
        }
+
+       .create-group-chat {
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .group-chat-form {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .user-selection {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 5px;
+        background: white;
+    }
+
+    .user-checkbox {
+        display: block;
+        padding: 5px 0;
+    }
+
+    .user-checkbox input[type="checkbox"] {
+        margin-right: 10px;
+    }
+
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+    
+        .create-btn {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+    
+        .create-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+    
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            overflow: auto;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .close {
+            position: absolute;
+            right: 15px;
+            top: 10px;
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+
+        .create-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 10px;
+        }
+
+        .create-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+    
+        .scroll-down-btn {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #4a76a8;
+    color: white;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    outline: none;
+}
+
+        .scroll-down-btn:hover {
+    background-color: #3a5a78;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.scroll-down-btn:active {
+    transform: translateY(0);
+}
+
+       
+            
+            .room-name {
+                font-size: 16px;
+            }
+            
+            .room-description, .room-created {
+                font-size: 12px;
+            }
+        
+  
+              
+            .room-card {
+                position: relative;
+                padding-right: 40px; /* Make space for delete button */
+            }
+        
+            .room-link {
+                text-decoration: none;
+                color: inherit;
+                display: block;
+            }
+        
+            .delete-form {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+            }
+        
+            .delete-btn {
+                background-color: #ff4444;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                font-size: 18px;
+                line-height: 1;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+                transition: background-color 0.3s;
+            }
+        
+            .delete-btn:hover {
+                background-color: #cc0000;
+            }
+
     </style>
 </head>
 <body>
@@ -505,10 +809,42 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
                 <span><?php echo htmlspecialchars($currentRoom['room_name']); ?></span>
                 <a href="<?php echo $_SERVER['PHP_SELF']; ?>">Back to Rooms</a>
             <?php else: ?>
-                <span>Anonymous Chat Rooms</span>
+                <div class="header-content">
+                    <span>Anonymous Chat Rooms</span>
+                    <button id="createGroupBtn" class="create-btn" title="Create New Room">+</button>
+                </div>
                 <a href="dashboard.php" class="dashboard-btn">Dashboard</a>
             <?php endif; ?>
         </header>
+
+        <!-- <div class="create-group-chat">
+    <h3>Create Group Chat</h3>
+    <form method="post" class="group-chat-form">
+        <div class="form-group">
+            <label for="group_name">Group Name:</label>
+            <input type="text" id="group_name" name="group_name" required>
+        </div>
+        <div class="form-group">
+            <label>Select Users:</label>
+            <div class="user-selection">
+                <?php
+                $users = getAllUsers($conn);
+                if (!empty($users)): 
+                    foreach ($users as $usr): ?>
+                        <label class="user-checkbox">
+                            <input type="checkbox" name="selected_users[]" 
+                                   value="<?php echo htmlspecialchars($usr['id']); ?>">
+                            <?php echo htmlspecialchars($usr['username']); ?>
+                        </label>
+                    <?php endforeach; 
+                else: ?>
+                    <p>No users available</p>
+                <?php endif; ?>
+            </div>
+        </div>
+        <button type="submit" name="create_group" class="btn">Create Group Chat</button>
+    </form>
+</div>     -->
         
         <?php if ($inRoom): ?>
             <div class="color-info">
@@ -521,6 +857,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
                     <div class="room-desc"><?php echo htmlspecialchars($currentRoom['description']); ?></div>
                 </div>
             </div>
+           
             
             <div class="messages-container" id="messages">
                 <?php foreach ($messages as $message): ?>
@@ -537,7 +874,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
                     </div>
                 <?php endforeach; ?>
             </div>
+            <button id="scrollDownBtn" class="scroll-down-btn" title="Scroll to bottom">↓</button>
             
+            <!-- Add this right after the messages-container div -->
+            <button id="scrollDownBtn" class="scroll-down-btn">↓</button>
+
             <form method="post" class="input-area">
                 <input type="hidden" name="room_id" value="<?php echo $currentRoom['id']; ?>">
                 <input type="text" id="message-input" name="message" placeholder="Type your message..." autocomplete="off" autofocus required>
@@ -545,60 +886,152 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1 && $inRoom) {
             </form>
             
             <script>
-                // Auto-scroll to bottom on page load
-                document.addEventListener('DOMContentLoaded', function() {
-                    const messagesContainer = document.getElementById('messages');
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                });
-                
-                // Set up polling for new messages
-                setInterval(function() {
-                    fetch('<?php echo $_SERVER['PHP_SELF']; ?>?room=<?php echo $currentRoom['id']; ?>&ajax=1')
-                        .then(response => response.text())
-                        .then(html => {
-                            const messagesContainer = document.getElementById('messages');
-                            const shouldScroll = messagesContainer.scrollHeight - messagesContainer.scrollTop === messagesContainer.clientHeight || 
-                                                messagesContainer.scrollTop > (messagesContainer.scrollHeight - messagesContainer.clientHeight - 100);
-                            
-                            messagesContainer.innerHTML = html;
-                            
-                            // Auto-scroll only if already at or near bottom before update
-                            if (shouldScroll) {
-                                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                            }
-                        })
-                        .catch(error => console.error('Error fetching messages:', error));
-                }, 3000); // Poll every 3 seconds
-            </script>
+document.addEventListener('DOMContentLoaded', function() {
+    const messagesContainer = document.getElementById('messages');
+    const scrollDownBtn = document.getElementById('scrollDownBtn');
+    
+    if (messagesContainer && scrollDownBtn) {
+        // Function to check if we're near bottom
+        function isNearBottom() {
+            const threshold = 100;
+            const position = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+            return position < threshold;
+        }
+
+        // Function to update scroll button visibility
+        function updateScrollButtonVisibility() {
+            if (isNearBottom()) {
+                scrollDownBtn.style.display = 'none';
+            } else {
+                scrollDownBtn.style.display = 'flex';
+            }
+        }
+
+        // Initial scroll to bottom and button state
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        updateScrollButtonVisibility();
+
+        // Handle scroll events
+        messagesContainer.addEventListener('scroll', updateScrollButtonVisibility);
+
+        // Handle scroll button click
+        scrollDownBtn.addEventListener('click', () => {
+            messagesContainer.scrollTo({
+                top: messagesContainer.scrollHeight,
+                behavior: 'smooth'
+            });
+        });
+
+        // Handle new messages (polling)
+        setInterval(function() {
+            fetch('<?php echo $_SERVER['PHP_SELF']; ?>?room=<?php echo $currentRoom['id']; ?>&ajax=1')
+                .then(response => response.text())
+                .then(html => {
+                    const wasNearBottom = isNearBottom();
+                    messagesContainer.innerHTML = html;
+                    
+                    if (wasNearBottom) {
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                        scrollDownBtn.style.display = 'none';
+                    } else {
+                        scrollDownBtn.style.display = 'flex';
+                    }
+                })
+                .catch(error => console.error('Error fetching messages:', error));
+        }, 3000);
+    }
+});
+</script>
         <?php else: ?>
             <!-- Room list page -->
+                        <!-- Replace the existing room card HTML in the room-list div -->
             <div class="room-list">
                 <?php foreach ($rooms as $room): ?>
-                <a href="<?php echo $_SERVER['PHP_SELF']; ?>?room=<?php echo $room['id']; ?>" style="text-decoration: none; color: inherit;">
-                    <div class="room-card">
+                <div class="room-card">
+                    <a href="<?php echo $_SERVER['PHP_SELF']; ?>?room=<?php echo $room['id']; ?>" class="room-link">
                         <div class="room-name"><?php echo htmlspecialchars($room['room_name']); ?></div>
                         <div class="room-description"><?php echo htmlspecialchars($room['description']); ?></div>
                         <div class="room-created">Created: <?php echo date('M j, Y', strtotime($room['created_at'])); ?></div>
-                    </div>
-                </a>
+                    </a>
+                    <form method="post" class="delete-form" onsubmit="return confirm('Are you sure you want to delete this room? This action cannot be undone.');">
+                        <input type="hidden" name="room_id" value="<?php echo $room['id']; ?>">
+                        <button type="submit" name="delete_room" class="delete-btn" title="Delete Room">×</button>
+                    </form>
+                </div>
                 <?php endforeach; ?>
             </div>
-            
-            <div class="new-room-form">
-                <div class="form-title">Create New Chat Room</div>
-                <form method="post">
-                    <div class="form-group">
-                        <label for="room_name">Room Name</label>
-                        <input type="text" id="room_name" name="room_name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="room_description">Description</label>
-                        <textarea id="room_description" name="room_description"></textarea>
-                    </div>
-                    <button type="submit" name="create_room" class="btn">Create Room</button>
-                </form>
+
+
+                <div class="create-group-chat">
+                    <h3>Create Group Chat</h3>
+                    <form method="post" class="group-chat-form">
+                            <div class="form-group">
+                                <label for="group_name">Group Name:</label>
+                                <input type="text" id="group_name" name="group_name" required>
+                </div>
+                <div class="form-group">
+                    <label>Select Users:</label>
+                    <div class="user-selection">
+                         <?php
+                // Fetch all users
+                        $users = getAllUsers($conn);
+                        foreach ($users as $user): ?>
+                            <label class="user-checkbox">
+                                 <input type="checkbox" name="selected_users[]" value="<?php echo htmlspecialchars($user['id']); ?>">
+                                 <?php echo htmlspecialchars($user['username']); ?>
+                            </label>
+                        <?php endforeach; ?>
+                 </div>
+        </div>
+        <button type="submit" name="create_group" class="btn">Create Group Chat</button>
+    </form>
+</div>
             </div>
         <?php endif; ?>
     </div>
+        <div id="groupChatModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <div class="new-room-form">
+            <div class="form-title">Create New Chat Room</div>
+            <form method="post">
+                <div class="form-group">
+                    <label for="modal_room_name">Room Name</label>
+                    <input type="text" id="modal_room_name" name="room_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="modal_room_description">Description</label>
+                    <textarea id="modal_room_description" name="room_description"></textarea>
+                </div>
+                <button type="submit" name="create_room" class="btn">Create Room</button>
+            </form>
+        </div>
+    </div>
+</div>
+    <script>
+        // Get modal elements
+        const modal = document.getElementById('groupChatModal');
+        const btn = document.getElementById('createGroupBtn');
+        const span = document.getElementsByClassName('close')[0];
+
+        if (btn && modal && span) {
+            // Open modal when + button is clicked
+            btn.onclick = function() {
+                modal.style.display = "block";
+            }
+
+            // Close modal when × is clicked
+            span.onclick = function() {
+                modal.style.display = "none";
+            }
+
+            // Close modal when clicking outside
+            window.onclick = function(event) {
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+            }
+        }
+    </script>
 </body>
 </html>

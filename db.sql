@@ -32,7 +32,19 @@ CREATE TABLE anon_chat (
     message TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS group_chats (
+    id SERIAL PRIMARY KEY,
+    group_name VARCHAR(100) NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
+CREATE TABLE IF NOT EXISTS group_members (
+    group_id INTEGER REFERENCES group_chats(id),
+    user_id VARCHAR(255) NOT NULL,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id)
+);
 INSERT INTO user_management.roles (id, role_name) VALUES 
     (1, 'Admin'), 
     (2, 'User'), 
